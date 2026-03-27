@@ -12,7 +12,8 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-y1o&xq05i4w^wlb!svr6p(&zw(^jk04eb9(=rj6+k+50t$hi%#')
-DEBUG = env_bool('DEBUG', True)
+# Safer default for production platforms (Vercel): DEBUG off unless explicitly enabled.
+DEBUG = env_bool('DEBUG', False)
 
 # Hosts / CSRF origins
 _allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost")
@@ -137,6 +138,13 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Let WhiteNoise serve files from STATICFILES_DIRS in production too.
 WHITENOISE_USE_FINDERS = True
+
+# WhiteNoise: cache-busted static files (good for Vercel/prod).
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

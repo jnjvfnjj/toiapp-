@@ -10,6 +10,8 @@ from .tokens import RegisterRefreshToken
 from rest_framework.decorators import api_view
 from django.shortcuts import render
 from django.conf import settings
+from django.http import HttpResponse
+from pathlib import Path
 import uuid
 
 from .models import Register, PhoneVerification, Venue, Event, Booking
@@ -135,17 +137,35 @@ class VerifyCodeView(APIView):
 
 
 def index(request):
-    """Отдает React приложение через Django template"""
-    try:
-        return render(request, 'build/index.html')
-    except Exception as e:
-        # Fallback если файл не найден
-        # Логируем ошибку для отладки (только в DEBUG режиме)
-        if settings.DEBUG:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Не удалось загрузить build/index.html: {e}")
-        return render(request, 'index_fallback.html')
+    """Отдает React приложение.
+
+    На хостингах типа Vercel часто бывает рассинхрон между build/index.html и
+    реальными файлами в build/assets. Чтобы не получать "белый экран", мы
+    подставляем существующие ассеты динамически.
+    """
+    build_dir = Path(settings.BASE_DIR) / "templates" / "build"
+    index_file = build_dir / "index.html"
+    assets_dir = build_dir / "assets"
+
+    if index_file.exists() and assets_dir.exists():
+        html = index_file.read_text(encoding="utf-8")
+
+        js_candidates = sorted(assets_dir.glob("index*.js"))
+        css_candidates = sorted(assets_dir.glob("index*.css"))
+        js_name = js_candidates[0].name if js_candidates else None
+        css_name = css_candidates[0].name if css_candidates else None
+
+        if js_name:
+            # Replace any previously generated index-*.js reference
+            html = __import__("re").sub(r'/assets/index-[^"]+\.js', f"/assets/{js_name}", html)
+            html = __import__("re").sub(r'/assets/index\.js', f"/assets/{js_name}", html)
+        if css_name:
+            html = __import__("re").sub(r'/assets/index-[^"]+\.css', f"/assets/{css_name}", html)
+            html = __import__("re").sub(r'/assets/index\.css', f"/assets/{css_name}", html)
+
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+    return render(request, "index_fallback.html")
 
 
 

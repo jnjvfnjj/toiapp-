@@ -159,13 +159,13 @@ def index(request):
             # Replace any previously generated index*.js reference (both /assets and /static/assets)
             html = __import__("re").sub(r'/assets/index-[^"]+\.js', f"/assets/{js_name}", html)
             html = __import__("re").sub(r'/assets/index\.js', f"/assets/{js_name}", html)
-            html = __import__("re").sub(r'/static/assets/index-[^"]+\.js', f"/static/assets/{js_name}", html)
-            html = __import__("re").sub(r'/static/assets/index\.js', f"/static/assets/{js_name}", html)
+            html = __import__("re").sub(r'/static/assets/index-[^"]+\.js', f"/assets/{js_name}", html)
+            html = __import__("re").sub(r'/static/assets/index\.js', f"/assets/{js_name}", html)
         if css_name:
             html = __import__("re").sub(r'/assets/index-[^"]+\.css', f"/assets/{css_name}", html)
             html = __import__("re").sub(r'/assets/index\.css', f"/assets/{css_name}", html)
-            html = __import__("re").sub(r'/static/assets/index-[^"]+\.css', f"/static/assets/{css_name}", html)
-            html = __import__("re").sub(r'/static/assets/index\.css', f"/static/assets/{css_name}", html)
+            html = __import__("re").sub(r'/static/assets/index-[^"]+\.css', f"/assets/{css_name}", html)
+            html = __import__("re").sub(r'/static/assets/index\.css', f"/assets/{css_name}", html)
 
         return HttpResponse(html, content_type="text/html; charset=utf-8")
 

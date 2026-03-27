@@ -16,6 +16,11 @@ let html = fs.readFileSync(indexPath, 'utf8');
 // Since we build with deterministic filenames (assets/index.js|css),
 // force the HTML to match.
 html = html
+  .replace(/<h1>\s*Hello int is index\.html\s*<\/h1>/gi, '')
+  .replace(/\/static\/assets\/index-[^"]+\.js/g, '/assets/index.js')
+  .replace(/\/static\/assets\/index-[^"]+\.css/g, '/assets/index.css')
+  .replace(/\/static\/assets\/index\.js/g, '/assets/index.js')
+  .replace(/\/static\/assets\/index\.css/g, '/assets/index.css')
   .replace(/\/assets\/index-[^"]+\.js/g, '/assets/index.js')
   .replace(/\/assets\/index-[^"]+\.css/g, '/assets/index.css');
 

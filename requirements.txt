@@ -21,6 +21,9 @@ twilio==9.10.2
 psycopg2-binary==2.9.10
 # mysqlclient>=2.1.0      # Для MySQL (раскомментируйте если нужно)
 
+# Static files in production (Vercel)
+whitenoise==6.10.0
+
 # Установка зависимостей:
 # pip install -r requirements.txt
 #

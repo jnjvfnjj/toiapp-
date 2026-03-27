@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
@@ -18,6 +18,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: undefined,
+        // Deterministic filenames simplify Django/Vercel static serving.
+        entryFileNames: 'assets/index.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name][extname]',
       },
     },
   },
@@ -31,5 +35,6 @@ export default defineConfig({
       },
     },
   },
-  base: '/',
-});
+  // In production we serve assets via Django STATIC_URL (/static/).
+  base: command === 'build' ? '/static/' : '/',
+}));

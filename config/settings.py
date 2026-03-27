@@ -65,6 +65,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -133,6 +134,9 @@ build_assets = BASE_DIR / 'templates' / 'build' / 'assets'
 if build_assets.exists() and build_assets.is_dir():
     STATICFILES_DIRS.append(build_assets)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Let WhiteNoise serve files from STATICFILES_DIRS in production too.
+WHITENOISE_USE_FINDERS = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

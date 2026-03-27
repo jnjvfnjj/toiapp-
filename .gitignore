@@ -48,8 +48,8 @@ Thumbs.db
 /node_modules/
 package-lock.json
 
-# React build (будет собираться)
-/templates/build/
+# React build (нужен для деплоя на Vercel)
+!/templates/build/
 /templates/node_modules/
 /templates/.vite/
 

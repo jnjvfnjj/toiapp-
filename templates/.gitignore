@@ -30,7 +30,8 @@ dist-ssr
 .env.development.local
 
 # Build outputs
-build
+# (не игнорируем build — он нужен Django/Vercel для отдачи главного экрана)
+# build
 .vite
 
 # OS files

@@ -607,28 +607,35 @@ function AppContent() {
 
   // Owner functions
   const addVenue = async (venueData: Omit<Venue, 'id'>) => {
-    const body = {
-      name: venueData.name,
-      description: venueData.description || '',
-      address: venueData.location?.address || '',
-      capacity: venueData.capacity || 0,
-      price_per_hour: venueData.price || 0,
-      amenities: venueData.amenities ? Object.keys(venueData.amenities).filter((k) => (venueData.amenities as Record<string, boolean>)[k]) : [],
-      photos: Array.isArray(venueData.photos) ? venueData.photos : [],
-      phone: venueData.phone || '',
-      whatsapp: venueData.whatsapp || '',
-      is_active: true,
-    };
-    const v = await api.post<BackendVenue>('venues/', body);
-    const newVenue: Venue = {
-      ...venueData,
-      id: String(v.id),
-      photos: Array.isArray(v.photos) ? v.photos : [],
-      mainPhoto: (Array.isArray(v.photos) && v.photos[0]) ? v.photos[0] : '',
-      ownerId: v.owner ? String(v.owner) : user?.id || '',
-    };
-    setVenues((prev) => [...prev, newVenue]);
-    navigateTo('ownerDashboard');
+    try {
+      const body = {
+        name: venueData.name,
+        description: venueData.description || '',
+        address: venueData.location?.address || '',
+        capacity: venueData.capacity || 0,
+        price_per_hour: venueData.price || 0,
+        amenities: venueData.amenities ? Object.keys(venueData.amenities).filter((k) => (venueData.amenities as Record<string, boolean>)[k]) : [],
+        photos: Array.isArray(venueData.photos) ? venueData.photos : [],
+        phone: venueData.phone || '',
+        whatsapp: venueData.whatsapp || '',
+        is_active: true,
+      };
+      const v = await api.post<BackendVenue>('venues/', body);
+      const newVenue: Venue = {
+        ...venueData,
+        id: String(v.id),
+        photos: Array.isArray(v.photos) ? v.photos : [],
+        mainPhoto: (Array.isArray(v.photos) && v.photos[0]) ? v.photos[0] : '',
+        ownerId: v.owner ? String(v.owner) : user?.id || '',
+      };
+      setVenues((prev) => [...prev, newVenue]);
+      navigateTo('ownerDashboard');
+      toast.success('Заведение опубликовано');
+    } catch (err: unknown) {
+      const msg = extractApiErrorMessage(err, 'Не удалось опубликовать заведение');
+      toast.error(msg);
+      throw err;
+    }
   };
 
   const createBooking = async (venueData: Venue) => {

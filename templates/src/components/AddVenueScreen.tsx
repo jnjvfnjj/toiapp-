@@ -9,7 +9,7 @@ import { EthnicBorder } from './EthnicPattern';
 import { Venue, VenueAmenities } from '../App';
 
 interface AddVenueScreenProps {
-  onComplete: (venue: Omit<Venue, 'id'>) => void;
+  onComplete: (venue: Omit<Venue, 'id'>) => void | Promise<void>;
   onBack: () => void;
   userId: string;
 }
@@ -29,6 +29,7 @@ const AMENITY_KEYS: (keyof VenueAmenities)[] = ['music', 'catering', 'parking', 
 export function AddVenueScreen({ onComplete, onBack, userId }: AddVenueScreenProps) {
   const t = useTranslations();
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     type: '',
@@ -119,17 +120,20 @@ export function AddVenueScreen({ onComplete, onBack, userId }: AddVenueScreenPro
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    if (isSubmitting) return;
     if (validateStep(step)) {
       if (step < 5) {
         setStep(step + 1);
       } else {
-        handleSubmit();
+        await handleSubmit();
       }
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     const venueData: Omit<Venue, 'id'> = {
       name: formData.name,
       type: formData.type,
@@ -148,7 +152,11 @@ export function AddVenueScreen({ onComplete, onBack, userId }: AddVenueScreenPro
       phone: formData.phone.replace(/\s/g, ''),
       amenities: formData.amenities,
     };
-    onComplete(venueData);
+    try {
+      await onComplete(venueData);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePhotoFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -580,6 +588,7 @@ export function AddVenueScreen({ onComplete, onBack, userId }: AddVenueScreenPro
               onClick={() => setStep(step - 1)}
               variant="outline"
               className="flex-1 py-6 rounded-2xl border-2"
+            disabled={isSubmitting}
             >
               {t.addVenue.back}
             </Button>
@@ -587,6 +596,8 @@ export function AddVenueScreen({ onComplete, onBack, userId }: AddVenueScreenPro
           <Button
             onClick={handleNext}
             className="flex-1 bg-gradient-to-r from-accent to-[#B88A16] hover:from-accent/90 hover:to-[#B88A16]/90 text-white py-6 rounded-2xl shadow-lg"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
           >
             {step === 5 ? t.addVenue.publish : t.addVenue.next}
           </Button>

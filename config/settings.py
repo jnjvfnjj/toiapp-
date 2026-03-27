@@ -36,6 +36,11 @@ if _vercel_url:
         CSRF_TRUSTED_ORIGINS.append(origin)
 if "https://*.vercel.app" not in CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS.append("https://*.vercel.app")
+
+# Failsafe for Vercel: prevent DisallowedHost if platform injects/changes hosts.
+# Vercel sets one of these env vars in deployed environments.
+if os.getenv("VERCEL") or os.getenv("VERCEL_ENV") or os.getenv("VERCEL_URL"):
+    ALLOWED_HOSTS = ["*"]
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',

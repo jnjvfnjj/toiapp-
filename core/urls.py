@@ -24,59 +24,53 @@ from django.views.static import serve
 urlpatterns = []
 
 # 1. СНАЧАЛА статические файлы (должны быть ПЕРВЫМИ, чтобы не перехватывались catch-all)
-if settings.DEBUG:
-    # Serve React build assets
-    assets_path = settings.BASE_DIR / 'templates' / 'build' / 'assets'
-    if assets_path.exists():
-        def serve_assets(request, path):
-            """Отдает статические файлы из build/assets с правильными заголовками"""
-            from django.http import HttpResponse, Http404
-            import os
-            
-            # Полный путь к файлу
-            file_path = assets_path / path
-            
-            # Проверяем безопасность пути (защита от path traversal)
-            try:
-                file_path = file_path.resolve()
-                if not str(file_path).startswith(str(assets_path.resolve())):
-                    raise Http404("File not found")
-            except (ValueError, OSError):
-                raise Http404("File not found")
-            
-            # Проверяем существование файла
-            if not file_path.exists() or not file_path.is_file():
-                raise Http404("File not found")
-            
-            # Читаем файл
-            try:
-                with open(file_path, 'rb') as f:
-                    content = f.read()
-            except IOError:
-                raise Http404("File not found")
-            
-            # Определяем Content-Type
-            content_type = 'application/octet-stream'
-            if path.endswith('.js'):
-                content_type = 'application/javascript; charset=utf-8'
-            elif path.endswith('.css'):
-                content_type = 'text/css; charset=utf-8'
-            elif path.endswith('.json'):
-                content_type = 'application/json; charset=utf-8'
-            elif path.endswith('.png'):
-                content_type = 'image/png'
-            elif path.endswith('.jpg') or path.endswith('.jpeg'):
-                content_type = 'image/jpeg'
-            elif path.endswith('.svg'):
-                content_type = 'image/svg+xml'
-            
-            # Создаем ответ
-            response = HttpResponse(content, content_type=content_type)
-            response['Cache-Control'] = 'public, max-age=31536000'
-            return response
+# Serve React build assets in both dev and prod (Vercel needs this).
+assets_path = settings.BASE_DIR / 'templates' / 'build' / 'assets'
+if assets_path.exists():
+    def serve_assets(request, path):
+        """Отдает статические файлы из build/assets с правильными заголовками"""
+        from django.http import HttpResponse, Http404
         
-        urlpatterns.append(re_path(r'^assets/(?P<path>.*)$', serve_assets))
+        file_path = assets_path / path
+        
+        # Защита от path traversal
+        try:
+            file_path = file_path.resolve()
+            if not str(file_path).startswith(str(assets_path.resolve())):
+                raise Http404("File not found")
+        except (ValueError, OSError):
+            raise Http404("File not found")
+        
+        if not file_path.exists() or not file_path.is_file():
+            raise Http404("File not found")
+        
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+        except IOError:
+            raise Http404("File not found")
+        
+        content_type = 'application/octet-stream'
+        if path.endswith('.js'):
+            content_type = 'application/javascript; charset=utf-8'
+        elif path.endswith('.css'):
+            content_type = 'text/css; charset=utf-8'
+        elif path.endswith('.json'):
+            content_type = 'application/json; charset=utf-8'
+        elif path.endswith('.png'):
+            content_type = 'image/png'
+        elif path.endswith('.jpg') or path.endswith('.jpeg'):
+            content_type = 'image/jpeg'
+        elif path.endswith('.svg'):
+            content_type = 'image/svg+xml'
+        
+        response = HttpResponse(content, content_type=content_type)
+        response['Cache-Control'] = 'public, max-age=31536000'
+        return response
     
+    urlpatterns.append(re_path(r'^assets/(?P<path>.*)$', serve_assets))
+
+if settings.DEBUG:
     # Serve Vite dev server assets (если используется dev режим)
     src_path = settings.BASE_DIR / 'templates' / 'src'
     if src_path.exists():

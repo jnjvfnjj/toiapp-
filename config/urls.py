@@ -22,10 +22,12 @@ schema_view = get_schema_view(
 
 urlpatterns = []
 
+# Serve React build assets in both dev and prod (Vercel needs this).
+assets_path = settings.BASE_DIR / 'templates' / 'build' / 'assets'
+if assets_path.exists():
+    urlpatterns.append(re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': assets_path}))
+
 if settings.DEBUG:
-    assets_path = settings.BASE_DIR / 'templates' / 'build' / 'assets'
-    if assets_path.exists():
-        urlpatterns.append(re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': assets_path}))
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 urlpatterns += [

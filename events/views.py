@@ -1,17 +1,25 @@
 from rest_framework import permissions, viewsets
 
 from .models import Booking, Event, Venue
-from .permissions import BookingPermission, OnlyAdminCanManageVenue, OnlyOrganizerCanModifyEvent
+from .permissions import BookingPermission, VenuePermission, OnlyOrganizerCanModifyEvent
 from .serializers import BookingSerializer, EventSerializer, VenueSerializer
 
 
 class VenueViewSet(viewsets.ModelViewSet):
     queryset = Venue.objects.filter(is_active=True)
     serializer_class = VenueSerializer
-    permission_classes = [OnlyAdminCanManageVenue]
+    permission_classes = [VenuePermission]
     filterset_fields = ('capacity', 'is_active')
     search_fields = ('name', 'address', 'description')
     ordering_fields = ('created_at', 'price_per_hour', 'capacity')
+
+    def perform_create(self, serializer):
+        # Owners create venues for themselves; admin can set owner explicitly via payload if needed.
+        user = self.request.user
+        if getattr(user, 'role', None) == 'owner':
+            serializer.save(owner=user)
+        else:
+            serializer.save()
 
 
 class EventViewSet(viewsets.ModelViewSet):

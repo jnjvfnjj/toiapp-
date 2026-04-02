@@ -16,7 +16,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-y1o&xq05i4w^wlb!svr6p(&zw(
 DEBUG = env_bool('DEBUG', False)
 
 # Hosts / CSRF origins
-_allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost")
+_allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
 ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
 
 # Vercel provides the deployment domain via VERCEL_URL (without scheme).

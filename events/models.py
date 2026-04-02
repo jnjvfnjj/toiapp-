@@ -45,6 +45,7 @@ class Event(models.Model):
     organizer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='events')
     venue = models.ForeignKey(Venue, on_delete=models.SET_NULL, related_name='events', null=True, blank=True)
     guest_count = models.PositiveIntegerField(default=0)
+    budget = models.BigIntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)
 

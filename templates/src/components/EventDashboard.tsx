@@ -28,13 +28,13 @@ export function EventDashboard({ event, onNavigate, guests, budgetItems, onBack 
 
   const totalSpent = budgetItems.reduce((sum, item) => sum + item.amount, 0);
   const budgetRemaining = event.budget - totalSpent;
-  const budgetPercentage = (totalSpent / event.budget) * 100;
+  const budgetPercentage = event.budget > 0 ? (totalSpent / event.budget) * 100 : 0;
 
   const checklist = [
     { id: 1, title: t.eventDashboard.checklistVenue, completed: !!event.venue },
     { id: 2, title: t.eventDashboard.checklistGuests, completed: guests.length > 0 },
     { id: 3, title: t.eventDashboard.checklistBudget, completed: budgetItems.length > 0 },
-    { id: 4, title: t.eventDashboard.checklistInvites, completed: false }
+    { id: 4, title: t.eventDashboard.checklistInvites, completed: guests.some((g) => g.invited) }
   ];
 
   const completedTasks = checklist.filter(item => item.completed).length;
@@ -185,6 +185,14 @@ export function EventDashboard({ event, onNavigate, guests, budgetItems, onBack 
               </label>
             ))}
           </div>
+
+          <Button
+            onClick={() => onNavigate('eventInvites')}
+            variant="outline"
+            className="w-full rounded-xl mt-4"
+          >
+            {t.eventDashboard.checklistInvites}
+          </Button>
         </div>
       </div>
 

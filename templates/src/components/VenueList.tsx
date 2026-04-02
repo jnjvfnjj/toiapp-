@@ -6,6 +6,7 @@ import { useTranslations } from '../i18n/translations';
 import { useLanguage } from '../i18n/LanguageContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import type { Venue } from '../App';
+import { getVenueFallbackImageUrl } from '../utils/venueImages';
 
 export interface VenueListItem {
   id: string | number;
@@ -44,7 +45,7 @@ export function VenueList({ onSelectVenue, onBack, venuesFromApi }: VenueListPro
         price: v.price,
         rating: 4.5,
         location: typeof v.location === 'object' ? v.location?.address ?? '' : (v.location ?? ''),
-        image: v.mainPhoto ?? '',
+        image: (v.mainPhoto && v.mainPhoto.trim()) ? v.mainPhoto : getVenueFallbackImageUrl({ id: v.id, name: v.name, type: v.type }),
         description: { ru: v.description ?? '', kg: v.description ?? '', en: v.description ?? '' },
       }))
     : DEFAULT_VENUES;
@@ -189,16 +190,6 @@ export function VenueList({ onSelectVenue, onBack, venuesFromApi }: VenueListPro
             )}
           </div>
         )}
-      </div>
-
-      {/* Map placeholder */}
-      <div className="h-48 bg-gradient-to-br from-cyan-100 to-blue-100 relative overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <MapPin className="w-16 h-16 text-cyan-500 opacity-50" />
-        </div>
-        <div className="absolute bottom-4 left-4 bg-card rounded-full px-4 py-2 shadow-lg">
-          <p className="text-card-foreground">Карта площадок</p>
-        </div>
       </div>
 
       {/* Venue cards */}

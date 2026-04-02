@@ -11,6 +11,9 @@ import { RoleSelection } from './components/auth/RoleSelection';
 import { PhoneAuth } from './components/auth/PhoneAuth';
 import OwnerAuthChoice from './components/auth/OwnerAuthChoice';
 import { OrganizerRegistration } from './components/auth/OrganizerRegistration';
+import OrganizerAuthChoice from './components/auth/OrganizerAuthChoice';
+import OrganizerSignIn from './components/auth/OrganizerSignIn';
+import OrganizerRegistrationForm from './components/auth/OrganizerRegistrationForm';
 import { OwnerRegistration } from './components/auth/OwnerRegistration';
 import { OwnerGoogleRegister } from './components/auth/OwnerGoogleRegister';
 import { OwnerSignIn } from './components/auth/OwnerSignIn';
@@ -38,6 +41,7 @@ import { AddVenueScreen } from './components/AddVenueScreen';
 import { MyVenuesScreen } from './components/MyVenuesScreen';
 import { OwnerBookingsScreen } from './components/OwnerBookingsScreen';
 import { ChatScreen } from './components/ChatScreen';
+import { InviteScreen } from './components/InviteScreen';
 
 // Settings and utility screens
 import { SettingsScreen } from './components/SettingsScreen';
@@ -46,6 +50,7 @@ import { LanguageSelector } from './components/LanguageSelector';
 import { getUser, getAccessToken, setTokens, setUser as setStoredUser, clearAuth, api } from './api';
 import type { VerifyResult } from './components/auth/PhoneAuth';
 import { toast } from 'sonner';
+import { getVenueFallbackImageUrl } from './utils/venueImages';
 
 export interface User {
   id: string;
@@ -79,6 +84,7 @@ export interface Guest {
   familyId?: string;
   role?: 'head' | 'parent' | 'child' | 'relative' | 'other';
   rsvpStatus?: 'confirmed' | 'maybe' | 'declined' | 'pending';
+  invited?: boolean;
   photoUrl?: string;
   relationshipType?: string; // мать, отец, брат, сестра и т.д.
 }
@@ -207,11 +213,16 @@ interface BackendUser {
   role: 'admin' | 'user' | 'organizer' | 'owner';
 }
 
+interface BackendEventWithBudget extends BackendEvent {
+  budget?: number;
+}
+
 function AppContent() {
   const extractApiErrorMessage = (err: unknown, fallback: string): string => {
     if (!err || typeof err !== 'object') return fallback;
     const maybe = err as { message?: string; data?: unknown };
-    if (typeof maybe.message === 'string' && maybe.message.trim()) return maybe.message;
+    // Prefer structured field errors over generic "Bad Request".
+    const msg = typeof maybe.message === 'string' ? maybe.message.trim() : '';
     if (maybe.data && typeof maybe.data === 'object') {
       const entries = Object.entries(maybe.data as Record<string, unknown>);
       for (const [field, value] of entries) {
@@ -223,6 +234,7 @@ function AppContent() {
         }
       }
     }
+    if (msg && msg.toLowerCase() !== 'bad request') return msg;
     return fallback;
   };
 
@@ -288,7 +300,7 @@ function AppContent() {
     const load = async () => {
       try {
         if (user.role === 'organizer') {
-          const data = await api.get<{ results?: BackendEvent[] }>(`events/`);
+          const data = await api.get<{ results?: BackendEventWithBudget[] }>(`events/`);
           const list = Array.isArray(data) ? data : (data.results ?? []);
           setEvents(list.map((e: BackendEvent) => ({
             id: String(e.id),
@@ -296,7 +308,7 @@ function AppContent() {
             date: e.date,
             time: (e.start_time || '').slice(0, 5),
             guests: e.guest_count ?? 0,
-            budget: 0,
+            budget: (e as BackendEventWithBudget).budget ?? 0,
             type: '',
             venue: e.venue ? { id: e.venue, name: e.venue_name } : undefined,
             ownerId: String(e.organizer),
@@ -313,7 +325,9 @@ function AppContent() {
           location: { lat: 0, lng: 0, address: v.address },
           description: v.description || '',
           photos: Array.isArray(v.photos) ? v.photos : [],
-          mainPhoto: (Array.isArray(v.photos) && v.photos[0]) ? v.photos[0] : '',
+          mainPhoto: (Array.isArray(v.photos) && v.photos[0])
+            ? v.photos[0]
+            : getVenueFallbackImageUrl({ id: v.id, name: v.name }),
           ownerId: v.owner ? String(v.owner) : '',
           whatsapp: v.whatsapp || '',
           phone: v.phone || '',
@@ -404,7 +418,7 @@ function AppContent() {
 
   const handleRoleSelection = (role: 'organizer' | 'owner') => {
     if (role === 'organizer') {
-      navigateTo('phoneAuth');
+      navigateTo('organizerAuthChoice');
     } else {
       navigateTo('ownerAuthChoice');
     }
@@ -458,6 +472,41 @@ function AppContent() {
     }
   };
 
+  const handleOrganizerSignIn = async (data: { email: string; password: string }) => {
+    try {
+      const auth = await api.post<{ access: string; refresh: string }>('token/', data);
+      setTokens(auth.access, auth.refresh);
+      const profile = await api.get<BackendUser>('profile/');
+      setStoredUser(profile);
+      setUser(mapBackendUser(profile));
+      navigateTo('home');
+    } catch (err: unknown) {
+      const msg = extractApiErrorMessage(err, 'Login failed');
+      toast.error(msg);
+    }
+  };
+
+  const handleOrganizerEmailRegistered = async (data: { name: string; surname: string; phone: string; email: string; password: string; photoUrl?: string }) => {
+    try {
+      const response = await api.post<{ user: BackendUser; access: string; refresh: string }>('register/', {
+        email: data.email,
+        username: data.name,
+        phone: data.phone || '',
+        password: data.password,
+        role: 'organizer',
+      });
+      setTokens(response.access, response.refresh);
+      setStoredUser(response.user);
+      const profile = { name: data.name, surname: data.surname, photoUrl: data.photoUrl };
+      localStorage.setItem('toi-profile', JSON.stringify(profile));
+      setUser(mapBackendUser(response.user, profile));
+      navigateTo('home');
+    } catch (err: unknown) {
+      const msg = extractApiErrorMessage(err, 'Registration failed');
+      toast.error(msg);
+    }
+  };
+
   const handleOrganizerRegistered = (userData: Partial<User>) => {
     setUser((prev) => {
       if (!prev) return prev;
@@ -492,9 +541,15 @@ function AppContent() {
   const createEvent = async (eventData: Event) => {
     if (!user) return;
     const [h = 12, m = 0] = (eventData.time || '12:00').split(':').map(Number);
-    const endH = (h + 2) % 24;
-    const startTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-    const endTime = `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+    const startMinutes = Math.max(0, Math.min(23 * 60 + 59, h * 60 + m));
+    // Backend expects same-day times with end_time > start_time. Cap at 23:59.
+    const endMinutes = Math.min(23 * 60 + 59, startMinutes + 120);
+    const startH = Math.floor(startMinutes / 60);
+    const startM = startMinutes % 60;
+    const endH = Math.floor(endMinutes / 60);
+    const endM = endMinutes % 60;
+    const startTime = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00`;
+    const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
     const body = {
       title: eventData.name,
       description: eventData.type || '',
@@ -504,6 +559,7 @@ function AppContent() {
       venue: selectedVenue?.id ? Number(selectedVenue.id) : null,
       status: 'draft',
       guest_count: eventData.guests || 0,
+      budget: eventData.budget || 0,
     };
     const e = await api.post<BackendEvent>('events/', body);
     const newEvent: Event = {
@@ -512,7 +568,7 @@ function AppContent() {
       date: e.date,
       time: (e.start_time || '').slice(0, 5),
       guests: e.guest_count ?? 0,
-      budget: 0,
+      budget: eventData.budget || 0,
       type: eventData.type || '',
       venue: selectedVenue ?? undefined,
       ownerId: user.id,
@@ -597,6 +653,11 @@ function AppContent() {
       eventId: currentEvent.id,
       familyId: familyId 
     }]);
+  };
+
+  const markGuestsInvited = (guestIds: string[]) => {
+    if (!guestIds.length) return;
+    setGuests((prev) => prev.map((g) => (guestIds.includes(g.id) ? { ...g, invited: true } : g)));
   };
 
   const addBudgetItem = (item: BudgetItem, eventId?: string) => {
@@ -691,7 +752,33 @@ function AppContent() {
       return (
         <PhoneAuth
           onVerified={handlePhoneVerified}
+          onBack={() => navigateTo('organizerAuthChoice')}
+        />
+      );
+    }
+
+    if (screen === 'organizerAuthChoice') {
+      return (
+        <OrganizerAuthChoice
           onBack={() => navigateTo('roleSelection')}
+          onSignIn={() => navigateTo('organizerSignIn')}
+          onRegister={() => navigateTo('organizerRegistrationForm')}
+        />
+      );
+    }
+    if (screen === 'organizerSignIn') {
+      return (
+        <OrganizerSignIn
+          onComplete={handleOrganizerSignIn}
+          onBack={() => navigateTo('organizerAuthChoice')}
+        />
+      );
+    }
+    if (screen === 'organizerRegistrationForm') {
+      return (
+        <OrganizerRegistrationForm
+          onComplete={handleOrganizerEmailRegistered}
+          onBack={() => navigateTo('organizerAuthChoice')}
         />
       );
     }
@@ -920,6 +1007,19 @@ function AppContent() {
             onAddItem={(item) => addBudgetItem(item, currentEvent.id)}
             onBack={() => navigateTo('eventDashboard')}
             eventName={currentEvent.name}
+          />
+        );
+
+      case 'eventInvites':
+        if (!currentEvent) return null;
+        const eventGuests = guests.filter((g) => g.eventId === currentEvent.id);
+        return (
+          <InviteScreen
+            event={currentEvent}
+            guests={eventGuests}
+            families={families}
+            onMarkInvited={markGuestsInvited}
+            onBack={() => navigateTo('eventDashboard')}
           />
         );
       case 'budget':

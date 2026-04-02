@@ -378,14 +378,21 @@ export function AddVenueScreen({ onComplete, onBack, userId }: AddVenueScreenPro
               )}
             </div>
 
-            {/* Map Preview */}
-            <div className="bg-muted rounded-2xl p-6 text-center">
-              <MapPin className="w-12 h-12 text-primary mx-auto mb-2" />
-              <p className="text-muted-foreground">{t.addVenue.mapCity}</p>
-              <p className="text-foreground">
-                {formData.location.lat.toFixed(4)}, {formData.location.lng.toFixed(4)}
-              </p>
-            </div>
+            {/* Map link (real) */}
+            {formData.address.trim().length >= 3 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full rounded-2xl py-6 border-2"
+                onClick={() => {
+                  const q = encodeURIComponent(formData.address.trim());
+                  window.open(`https://2gis.kg/search/${q}`, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                <MapPin className="w-5 h-5 mr-2" />
+                Открыть адрес на карте
+              </Button>
+            )}
           </div>
         )}
 

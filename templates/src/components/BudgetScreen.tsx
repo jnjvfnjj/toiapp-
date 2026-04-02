@@ -46,8 +46,10 @@ export function BudgetScreen({ budgetItems, totalBudget, onAddItem, onBack, even
   };
 
   const totalSpent = budgetItems.reduce((sum, item) => sum + item.amount, 0);
-  const remaining = totalBudget - totalSpent;
-  const percentageUsed = (totalSpent / totalBudget) * 100;
+  const rawRemaining = totalBudget - totalSpent;
+  const overspent = Math.max(totalSpent - totalBudget, 0);
+  const remaining = Math.max(rawRemaining, 0);
+  const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
 
   const getCategoryInfo = (categoryId: string) => {
     return categories.find(c => c.id === categoryId) || categories[categories.length - 1];
@@ -96,16 +98,28 @@ export function BudgetScreen({ budgetItems, totalBudget, onAddItem, onBack, even
               </div>
               <p className="text-card-foreground">{totalSpent.toLocaleString()} сом</p>
             </div>
-            <div className={`rounded-xl p-3 ${remaining >= 0 ? 'bg-popover' : 'bg-popover'}`}>
-              <div className={`flex items-center gap-2 mb-1 ${remaining >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+            <div className="rounded-xl p-3 bg-popover">
+              <div className={`flex items-center gap-2 mb-1 ${overspent > 0 ? 'text-red-600' : 'text-blue-600'}`}>
                 <TrendingUp className="w-4 h-4" />
-                <span>{t.budgetScreen.remaining}</span>
+                <span>{overspent > 0 ? t.budgetScreen.overspent.replace('{amount}', '') : t.budgetScreen.remaining}</span>
               </div>
-              <p className={remaining >= 0 ? 'text-card-foreground' : 'text-card-foreground'}>
-                {remaining.toLocaleString()} сом
-              </p>
+              {overspent > 0 ? (
+                <p className="text-card-foreground">
+                  -{overspent.toLocaleString()} сом
+                </p>
+              ) : (
+                <p className="text-card-foreground">
+                  {remaining.toLocaleString()} сом
+                </p>
+              )}
             </div>
           </div>
+
+          {overspent > 0 && (
+            <p className="mt-3 text-red-600">
+              {t.budgetScreen.overspent.replace('{amount}', overspent.toLocaleString())}
+            </p>
+          )}
         </div>
       </div>
 

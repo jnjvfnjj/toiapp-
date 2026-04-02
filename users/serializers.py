@@ -17,6 +17,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         validate_password(value)
         return value
 
+    def validate_email(self, value: str) -> str:
+        return (value or '').strip().lower()
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User(**validated_data)
@@ -48,6 +51,7 @@ class PhoneRequestSerializer(serializers.Serializer):
 class VerifyCodeSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
     code = serializers.CharField(min_length=6, max_length=6)
+    role = serializers.ChoiceField(choices=('organizer', 'owner'), required=False)
 
     def validate_phone(self, value):
         return PhoneRequestSerializer().fields['phone'].run_validation(value)

@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -30,11 +31,27 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
 
     def validate(self, attrs):
-        if 'email' not in attrs or not attrs.get('email'):
+        email = (attrs.get('email') or '').strip().lower()
+        password = attrs.get('password') or ''
+        if not email:
             raise serializers.ValidationError({'email': ['This field is required.']})
-        if 'password' not in attrs or not attrs.get('password'):
+        if not password:
             raise serializers.ValidationError({'password': ['This field is required.']})
-        return super().validate(attrs)
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            # Make it explicit: email not found.
+            raise serializers.ValidationError({'email': ['Аккаунт с таким email не найден']})
+        if not user.is_active:
+            raise serializers.ValidationError({'email': ['Аккаунт отключён']})
+
+        # Use Django authentication to validate password.
+        authed = authenticate(**{User.USERNAME_FIELD: email, 'password': password})
+        if not authed:
+            raise serializers.ValidationError({'password': ['Неверный пароль']})
+
+        # Delegate token creation to SimpleJWT.
+        return super().validate({'email': email, 'password': password})
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -108,6 +125,7 @@ class VerifyCodeAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         phone = serializer.validated_data['phone']
         code = serializer.validated_data['code']
+        desired_role = serializer.validated_data.get('role') or 'organizer'
 
         time_threshold = timezone.now() - timedelta(minutes=10)
         verification = (
@@ -138,9 +156,12 @@ class VerifyCodeAPIView(APIView):
                 email=email,
                 username=f'user_{uuid.uuid4().hex[:8]}',
                 phone=phone,
-                role='organizer',
+                role=desired_role,
                 password=uuid.uuid4().hex,
             )
+        else:
+            # If user exists but role differs, keep current role (don't silently change).
+            pass
 
         refresh = RefreshToken.for_user(user)
         return Response(

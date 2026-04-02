@@ -15,9 +15,10 @@ export interface VerifyResult {
 interface PhoneAuthProps {
   onVerified: (data: VerifyResult) => void;
   onBack: () => void;
+  role?: 'organizer' | 'owner';
 }
 
-export function PhoneAuth({ onVerified, onBack }: PhoneAuthProps) {
+export function PhoneAuth({ onVerified, onBack, role = 'organizer' }: PhoneAuthProps) {
   const t = useTranslations();
 
   const [step, setStep] = useState<'phone' | 'code'>('phone');
@@ -103,7 +104,7 @@ export function PhoneAuth({ onVerified, onBack }: PhoneAuthProps) {
         refresh: string;
         user: { id: number; username: string; email: string; phone: string; role: string };
         is_new_user: boolean;
-      }>('verify-code/', { phone: cleanPhoneNumber(), code });
+      }>('verify-code/', { phone: cleanPhoneNumber(), code, role });
 
       setTokens(data.access, data.refresh);
       setUser(data.user);

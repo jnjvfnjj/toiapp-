@@ -3,6 +3,8 @@ import { Button } from './ui/button';
 import { useTranslations } from '../i18n/translations';
 import { useLanguage } from '../i18n/LanguageContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { getVenueMapUrl } from '../utils/maps';
+import { getVenueFallbackImageUrl } from '../utils/venueImages';
 
 export interface VenueDetailProps {
   venue: any;
@@ -18,7 +20,7 @@ export function VenueDetail({ venue, onBack, onSelect, isOwnerView }: VenueDetai
   const { language } = useLanguage();
 
   // Поддержка и формата списка (image, location строка), и формата заведений владельца (mainPhoto, location.address)
-  const imageSrc = venue.mainPhoto ?? venue.image;
+  const imageSrc = (venue.mainPhoto ?? venue.image) || getVenueFallbackImageUrl({ id: venue.id, name: venue.name, type: venue.type });
   const locationText = typeof venue.location === 'object' && venue.location?.address
     ? venue.location.address
     : (venue.location ?? '');
@@ -42,6 +44,12 @@ export function VenueDetail({ venue, onBack, onSelect, isOwnerView }: VenueDetai
     const message = t.venues.contactMessage.replace('{name}', venue.name);
     window.open(`https://wa.me/996555123456?text=${encodeURIComponent(message)}`, '_blank');
   };
+
+  const mapUrl = getVenueMapUrl({
+    address: locationText,
+    lat: typeof venue.location === 'object' ? venue.location?.lat : undefined,
+    lng: typeof venue.location === 'object' ? venue.location?.lng : undefined,
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -128,12 +136,19 @@ export function VenueDetail({ venue, onBack, onSelect, isOwnerView }: VenueDetai
         )}
 
         {/* Mini map */}
-        <div className="mb-6">
-          <h3 className="mb-3">{t.venues.location}</h3>
-          <div className="h-48 bg-card rounded-2xl flex items-center justify-center">
-            <MapPin className="w-12 h-12 text-cyan-500" />
+        {mapUrl && (
+          <div className="mb-6">
+            <h3 className="mb-3">{t.venues.location}</h3>
+            <Button
+              onClick={() => window.open(mapUrl, '_blank', 'noopener,noreferrer')}
+              variant="outline"
+              className="w-full rounded-2xl py-6 border-2"
+            >
+              <MapPin className="w-5 h-5 mr-2" />
+              Открыть на карте
+            </Button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Fixed bottom actions */}

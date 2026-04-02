@@ -1,15 +1,29 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
-class OnlyAdminCanManageVenue(BasePermission):
+class VenuePermission(BasePermission):
+    """
+    Venues:
+    - Read/list/retrieve: any authenticated user
+    - Create: owner or admin
+    - Update/delete: admin or the venue owner
+    """
+
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
-            return True
+            return bool(request.user and request.user.is_authenticated)
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role == 'admin'
+            and request.user.role in ('owner', 'admin')
         )
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+        if request.user.role == 'admin':
+            return True
+        return bool(obj.owner_id == request.user.id)
 
 
 class OnlyOrganizerCanModifyEvent(BasePermission):

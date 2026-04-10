@@ -20,6 +20,7 @@ from .serializers import (
     RegisterSerializer,
     UserSerializer,
     VerifyCodeSerializer,
+    _username_for_email,
 )
 
 User = get_user_model()
@@ -30,9 +31,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     Возвращает более понятные ошибки и явно ожидает email + password.
     """
 
+    role = serializers.ChoiceField(
+        choices=[User.ROLE_ORGANIZER, User.ROLE_OWNER],
+        required=False,
+        help_text='Организатор или владелец при входе',
+    )
+
     def validate(self, attrs):
         email = (attrs.get('email') or '').strip().lower()
         password = attrs.get('password') or ''
+        role = attrs.get('role')
         if not email:
             raise serializers.ValidationError({'email': ['This field is required.']})
         if not password:
@@ -40,10 +48,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         user = User.objects.filter(email=email).first()
         if not user:
-            # Make it explicit: email not found.
             raise serializers.ValidationError({'email': ['Аккаунт с таким email не найден']})
         if not user.is_active:
             raise serializers.ValidationError({'email': ['Аккаунт отключён']})
+
+        if role:
+            if role not in {User.ROLE_ORGANIZER, User.ROLE_OWNER}:
+                raise serializers.ValidationError({'role': ['Неправильный тип пользователя']})
+            if user.role != role:
+                user.role = role
+                user.save(update_fields=['role'])
 
         # Use Django authentication to validate password.
         authed = authenticate(**{User.USERNAME_FIELD: email, 'password': password})
@@ -72,6 +86,53 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     '-d "{\\"email\\":\\"user@example.com\\",\\"password\\":\\"your_password\\"}"'
                 ),
                 'swagger': '/swagger/',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class GoogleOAuthSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    role = serializers.ChoiceField(
+        choices=[User.ROLE_ORGANIZER, User.ROLE_OWNER],
+        required=True,
+        help_text='organizer или owner',
+    )
+
+    def validate_email(self, value: str) -> str:
+        return (value or '').strip().lower()
+
+
+class GoogleOAuthAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = GoogleOAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        name = serializer.validated_data.get('name') or ''
+        role = serializer.validated_data['role']
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            user = User(
+                email=email,
+                username=_username_for_email(email),
+                role=role,
+            )
+            user.set_unusable_password()
+            user.save()
+        elif user.role != role:
+            user.role = role
+            user.save(update_fields=['role'])
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                'user': UserSerializer(user).data,
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
             },
             status=status.HTTP_200_OK,
         )

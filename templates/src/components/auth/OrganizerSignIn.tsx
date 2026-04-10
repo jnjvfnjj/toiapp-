@@ -26,7 +26,7 @@ export function OrganizerSignIn({ onComplete, onBack }: OrganizerSignInProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (validate()) onComplete({ email, password });
+    if (validate()) onComplete({ email: email.trim().toLowerCase(), password });
   };
 
   return (

@@ -54,6 +54,32 @@ export interface ApiError {
   data?: unknown;
 }
 
+/** Из тела ответа DRF (400) достаёт первое человекочитаемое сообщение. */
+export function parseApiErrorBody(data: unknown): string | null {
+  if (data === null || data === undefined) return null;
+  if (typeof data === 'string') return data;
+  if (typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  if (typeof d.detail === 'string') return d.detail;
+  if (Array.isArray(d.detail) && d.detail.length > 0) {
+    const first = d.detail[0];
+    if (typeof first === 'string') return first;
+  }
+  if (typeof d.error === 'string') return d.error;
+  if (Array.isArray(d.non_field_errors) && d.non_field_errors.length > 0) {
+    const first = d.non_field_errors[0];
+    if (typeof first === 'string') return first;
+  }
+  for (const [, value] of Object.entries(d)) {
+    if (Array.isArray(value) && value.length > 0) {
+      const first = value[0];
+      if (typeof first === 'string') return first;
+    }
+    if (typeof value === 'string') return value;
+  }
+  return null;
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
@@ -105,9 +131,16 @@ export async function apiRequest<T = unknown>(
   }
 
   if (!res.ok) {
-    const err = data as { error?: string; detail?: string };
+    const parsed = parseApiErrorBody(data);
+    const err = data as { error?: string; detail?: unknown };
+    const fallback =
+      parsed ||
+      (typeof err.error === 'string' ? err.error : null) ||
+      (typeof err.detail === 'string' ? err.detail : null) ||
+      res.statusText ||
+      'Request failed';
     throw {
-      message: err.error || err.detail || res.statusText || 'Request failed',
+      message: fallback,
       status: res.status,
       data,
     } as ApiError;

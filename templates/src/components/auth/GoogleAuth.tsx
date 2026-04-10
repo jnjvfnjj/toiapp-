@@ -1,72 +1,74 @@
-import { useState } from 'react';
-import { ArrowLeft, Mail } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { EthnicBorder } from '../EthnicPattern';
 import { useTranslations } from '../../i18n/translations';
+import { parseGoogleToken, type GoogleOAuthResponse } from '../../hooks/useGoogleAuth';
 
 interface GoogleAuthProps {
+  title: string;
   onAuthenticated: (email: string, name: string) => void;
   onBack: () => void;
   onRegister?: () => void;
 }
 
-export function GoogleAuth({ onAuthenticated, onBack, onRegister }: GoogleAuthProps) {
+export function GoogleAuth({ title, onAuthenticated, onBack, onRegister }: GoogleAuthProps) {
   const t = useTranslations();
-  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'demo_client_id';
 
-  const handleGoogleSignIn = () => {
-    setError('');
-    const popupUrl = `${window.location.origin}/google-oauth-sim.html`;
-    const popup = window.open(popupUrl, 'google_oauth', 'width=500,height=600');
-    if (!popup) {
-      setError('Popup blocked. Разрешите всплывающие окна для этого сайта.');
+  useEffect(() => {
+    if (!clientId) {
+      setError('Google Client ID не настроен. Обратитесь к администратору.');
       return;
     }
 
-    setLoading(true);
-
-    const handleMessage = (e: MessageEvent) => {
-      if (e.origin !== window.location.origin) return;
-      const data = e.data as any;
-      if (data && data.type === 'google-auth' && data.email) {
-        window.removeEventListener('message', handleMessage);
-        setLoading(false);
-        onAuthenticated(data.email, data.name || data.email.split('@')[0]);
+    const initializeGoogle = () => {
+      if (window.google?.accounts?.id && googleButtonRef.current) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleResponse,
+          });
+          window.google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'outline',
+            size: 'large',
+            width: '100%',
+          });
+        } catch (err) {
+          console.error('Failed to initialize Google:', err);
+          setError('Ошибка при инициализации Google. Попробуйте позже.');
+        }
       }
     };
 
-    window.addEventListener('message', handleMessage);
-
-    // Fallback: if popup is closed without message, stop loading
-    const poll = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(poll);
-        window.removeEventListener('message', handleMessage);
-        if (loading) {
-          setLoading(false);
-          setError(t.auth.verifying || 'Аутентификация прервана');
-        }
-      }
-    }, 300);
-  };
-
-  const handleEmailSignIn = () => {
-    setError('');
-    
-    if (!email.includes('@gmail.com')) {
-      setError(t.auth.emailMustBeGmail);
-      return;
+    if (window.google?.accounts?.id) {
+      initializeGoogle();
+    } else {
+      const timer = setTimeout(initializeGoogle, 500);
+      return () => clearTimeout(timer);
     }
+  }, [clientId]);
 
+  const handleGoogleResponse = async (response: GoogleOAuthResponse) => {
+    setError('');
     setLoading(true);
-    // Simulate email verification
-    setTimeout(() => {
+
+    try {
+      const userInfo = parseGoogleToken(response.credential);
+      if (!userInfo) {
+        throw new Error('Failed to parse Google token');
+      }
       setLoading(false);
-      onAuthenticated(email, email.split('@')[0]);
-    }, 1500);
+      onAuthenticated(userInfo.email, userInfo.name);
+    } catch (err) {
+      setLoading(false);
+      const msg = err instanceof Error ? err.message : 'Google authentication failed';
+      setError(msg);
+      console.error('Google auth error:', err);
+    }
   };
 
   return (
@@ -85,51 +87,43 @@ export function GoogleAuth({ onAuthenticated, onBack, onRegister }: GoogleAuthPr
             <div className="w-10 h-10 rounded-full bg-white" />
           </div>
           
-          <h2 className="mb-3 text-foreground">{t.profile.owner} - вход</h2>
+          <h2 className="mb-3 text-foreground">{title}</h2>
           
           <div className="w-20 mx-auto mb-4">
             <EthnicBorder className="text-accent" />
           </div>
           
-          <p className="text-muted-foreground">{t.auth.getCode} {t.languages?.english ?? ''}</p>
+          <p className="text-muted-foreground">Используйте свой Google аккаунт для входа</p>
         </div>
 
-          <div className="space-y-4">
-            {/* Google Sign-In Button */}
-            <Button
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 py-6 rounded-2xl shadow-lg disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                  {t.auth.sendingCode}
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  {/* Google logo */}
-                  <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                    <path d="M43.611 20.083H42V20H24v8h11.3C34.9 32.89 30.06 36 24 36c-7.18 0-13-5.82-13-13s5.82-13 13-13c3.26 0 6.22 1.24 8.48 3.26l5.66-5.66C33.5 4.9 29.09 3 24 3 12.95 3 4 11.95 4 23s8.95 20 20 20 20-8.95 20-20c0-1.34-.12-2.65-.389-3.917z" fill="#EA4335"/>
-                  </svg>
-                  {t.auth.signInWithGoogle}
-                </div>
-              )}
-            </Button>
+        <div className="space-y-4">
+          {error && (
+            <div className="bg-destructive/10 border border-destructive text-destructive rounded-lg p-3 text-sm">
+              {error}
+            </div>
+          )}
 
-            {/* Register Button (replaces manual Gmail input — next) */}
+          {/* Google Sign-In Button */}
+          <div ref={googleButtonRef} className="flex justify-center" />
+
+          {/* Fallback registration button */}
+          {onRegister && (
             <Button
-              onClick={() => {
-                onRegister?.();
-              }}
+              onClick={onRegister}
               className="w-full bg-gradient-to-r from-accent to-[#B88A16] hover:from-accent hover:to-[#B88A16] text-white py-6 rounded-2xl shadow-lg"
             >
               {t.common.register}
             </Button>
-          </div>
-
-          <p className="text-center text-muted-foreground mt-6">{t.auth.demoNote}</p>
+          )}
         </div>
+
+        <p className="text-center text-muted-foreground mt-6 text-sm">
+          Ваши данные используются только для входа в аккаунт
+        </p>
       </div>
+    </div>
   );
 }
+
+export default GoogleAuth;
+

@@ -17,6 +17,7 @@ import OrganizerRegistrationForm from './components/auth/OrganizerRegistrationFo
 import { OwnerRegistration } from './components/auth/OwnerRegistration';
 import { OwnerGoogleRegister } from './components/auth/OwnerGoogleRegister';
 import { OwnerSignIn } from './components/auth/OwnerSignIn';
+import { GoogleAuth } from './components/auth/GoogleAuth';
 
 // Main app screens
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -47,7 +48,7 @@ import { InviteScreen } from './components/InviteScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SupportScreen } from './components/SupportScreen';
 import { LanguageSelector } from './components/LanguageSelector';
-import { getUser, getAccessToken, setTokens, setUser as setStoredUser, clearAuth, api } from './api';
+import { getUser, getAccessToken, setTokens, setUser as setStoredUser, clearAuth, api, parseApiErrorBody } from './api';
 import type { VerifyResult } from './components/auth/PhoneAuth';
 import { toast } from 'sonner';
 import { getVenueFallbackImageUrl } from './utils/venueImages';
@@ -221,13 +222,14 @@ function AppContent() {
   const extractApiErrorMessage = (err: unknown, fallback: string): string => {
     if (!err || typeof err !== 'object') return fallback;
     const maybe = err as { message?: string; data?: unknown };
-    // Prefer structured field errors over generic "Bad Request".
+    const fromBody = parseApiErrorBody(maybe.data);
+    if (fromBody) return fromBody;
     const msg = typeof maybe.message === 'string' ? maybe.message.trim() : '';
     if (maybe.data && typeof maybe.data === 'object') {
       const entries = Object.entries(maybe.data as Record<string, unknown>);
       for (const [field, value] of entries) {
         if (Array.isArray(value) && value.length > 0) {
-          return `${field}: ${String(value[0])}`;
+          return field === 'non_field_errors' ? String(value[0]) : `${field}: ${String(value[0])}`;
         }
         if (typeof value === 'string') {
           return `${field}: ${value}`;
@@ -243,15 +245,23 @@ function AppContent() {
     return 'organizer';
   };
 
-  const mapBackendUser = (u: BackendUser, profile?: { name?: string; surname?: string; photoUrl?: string }): User => ({
-    id: String(u.id),
-    role: mapRole(u.role),
-    name: profile?.name ?? u.username,
-    surname: profile?.surname,
-    phone: u.phone,
-    email: u.email,
-    photoUrl: profile?.photoUrl,
-  });
+  const mapBackendUser = (u: BackendUser, profile?: { name?: string; surname?: string; photoUrl?: string }): User => {
+    const fallbackName =
+      u.username && !u.username.includes('@')
+        ? u.username
+        : u.email?.includes('@')
+          ? u.email.split('@')[0]
+          : u.email || 'Пользователь';
+    return {
+      id: String(u.id),
+      role: mapRole(u.role),
+      name: profile?.name ?? fallbackName,
+      surname: profile?.surname,
+      phone: u.phone,
+      email: u.email,
+      photoUrl: profile?.photoUrl,
+    };
+  };
 
   const { language, setLanguage } = useLanguage();
   const t = useTranslations(language);
@@ -376,12 +386,20 @@ function AppContent() {
     localStorage.setItem('toi-app-language', language);
   }, [language]);
 
+  const [routeData, setRouteData] = useState<{ phone?: string; email?: string; name?: string; mode?: string }>({});
+
   const navigateTo = (screenName: string, data?: { event?: Event; venue?: Venue; familyId?: string; phone?: string; email?: string; name?: string; mode?: string }) => {
     setHistory((h) => [...h, screen]);
     setScreen(screenName);
     if (data?.event) setCurrentEvent(data.event);
     if (data?.venue) setSelectedVenue(data.venue);
     if (data?.familyId) setSelectedFamilyId(data.familyId);
+    setRouteData({
+      phone: data?.phone,
+      email: data?.email,
+      name: data?.name,
+      mode: data?.mode,
+    });
   };
 
   const [history, setHistory] = useState<string[]>([]);
@@ -434,33 +452,38 @@ function AppContent() {
     }
   };
 
-  const handleGoogleAuth = (email: string, name: string) => {
-    // After Google OAuth, offer register or sign-in for owners
-    navigateTo('ownerAuthChoice', { email, name });
-  };
-
   const handleOwnerGoogleRegister = async (data: { email: string; name: string; password: string }) => {
     try {
+      const email = data.email.trim().toLowerCase();
       const res = await api.post<{ user: BackendUser; access: string; refresh: string }>('register/', {
-        email: data.email,
-        username: data.name,
+        email,
+        username: email,
         phone: '',
         password: data.password,
         role: 'owner',
       });
       setTokens(res.access, res.refresh);
       setStoredUser(res.user);
-      setUser(mapBackendUser(res.user));
+      const nameParts = data.name.trim().split(/\s+/).filter(Boolean);
+      const profile = {
+        name: nameParts[0] || email.split('@')[0],
+        surname: nameParts.slice(1).join(' ') || undefined,
+      };
+      localStorage.setItem('toi-profile', JSON.stringify({ ...profile, photoUrl: undefined }));
+      setUser(mapBackendUser(res.user, profile));
       navigateTo('home');
     } catch (err: unknown) {
-      const msg = extractApiErrorMessage(err, 'Registration failed');
+      const msg = extractApiErrorMessage(err, 'Не удалось зарегистрироваться');
       toast.error(msg);
     }
   };
 
   const handleOwnerSignIn = async (data: { email: string; password: string }) => {
     try {
-      const auth = await api.post<{ access: string; refresh: string }>('token/', data);
+      const auth = await api.post<{ access: string; refresh: string }>('token/', {
+        ...data,
+        role: 'owner',
+      });
       setTokens(auth.access, auth.refresh);
       const profile = await api.get<BackendUser>('profile/');
       setStoredUser(profile);
@@ -472,9 +495,58 @@ function AppContent() {
     }
   };
 
+  const handleOwnerGoogleLogin = async (email: string, name: string) => {
+    try {
+      const response = await api.post<{ user: BackendUser; access: string; refresh: string }>('google-auth/', {
+        email: email.trim().toLowerCase(),
+        name,
+        role: 'owner',
+      });
+      setTokens(response.access, response.refresh);
+      setStoredUser(response.user);
+      const nameParts = name.trim().split(/\s+/).filter(Boolean);
+      const profile = {
+        name: nameParts[0] || email.split('@')[0],
+        surname: nameParts.slice(1).join(' ') || undefined,
+      };
+      localStorage.setItem('toi-profile', JSON.stringify({ ...profile, photoUrl: undefined }));
+      setUser(mapBackendUser(response.user, profile));
+      navigateTo('home');
+    } catch (err: unknown) {
+      const msg = extractApiErrorMessage(err, 'Не удалось войти через Google');
+      toast.error(msg);
+    }
+  };
+
+  const handleOrganizerGoogleLogin = async (email: string, name: string) => {
+    try {
+      const response = await api.post<{ user: BackendUser; access: string; refresh: string }>('google-auth/', {
+        email: email.trim().toLowerCase(),
+        name,
+        role: 'organizer',
+      });
+      setTokens(response.access, response.refresh);
+      setStoredUser(response.user);
+      const nameParts = name.trim().split(/\s+/).filter(Boolean);
+      const profile = {
+        name: nameParts[0] || email.split('@')[0],
+        surname: nameParts.slice(1).join(' ') || undefined,
+      };
+      localStorage.setItem('toi-profile', JSON.stringify({ ...profile, photoUrl: undefined }));
+      setUser(mapBackendUser(response.user, profile));
+      navigateTo('home');
+    } catch (err: unknown) {
+      const msg = extractApiErrorMessage(err, 'Не удалось войти через Google');
+      toast.error(msg);
+    }
+  };
+
   const handleOrganizerSignIn = async (data: { email: string; password: string }) => {
     try {
-      const auth = await api.post<{ access: string; refresh: string }>('token/', data);
+      const auth = await api.post<{ access: string; refresh: string }>('token/', {
+        ...data,
+        role: 'organizer',
+      });
       setTokens(auth.access, auth.refresh);
       const profile = await api.get<BackendUser>('profile/');
       setStoredUser(profile);
@@ -488,9 +560,10 @@ function AppContent() {
 
   const handleOrganizerEmailRegistered = async (data: { name: string; surname: string; phone: string; email: string; password: string; photoUrl?: string }) => {
     try {
+      const email = data.email.trim().toLowerCase();
       const response = await api.post<{ user: BackendUser; access: string; refresh: string }>('register/', {
-        email: data.email,
-        username: data.name,
+        email,
+        username: email,
         phone: data.phone || '',
         password: data.password,
         role: 'organizer',
@@ -502,7 +575,7 @@ function AppContent() {
       setUser(mapBackendUser(response.user, profile));
       navigateTo('home');
     } catch (err: unknown) {
-      const msg = extractApiErrorMessage(err, 'Registration failed');
+      const msg = extractApiErrorMessage(err, 'Не удалось зарегистрироваться');
       toast.error(msg);
     }
   };
@@ -519,9 +592,10 @@ function AppContent() {
 
   const handleOwnerRegistered = async (userData: Partial<User> & { password?: string }) => {
     try {
+      const email = (userData.email || '').trim().toLowerCase();
       const response = await api.post<{ user: BackendUser; access: string; refresh: string }>('register/', {
-        email: userData.email,
-        username: userData.name,
+        email,
+        username: email,
         phone: userData.phone || '',
         password: userData.password,
         role: 'owner',
@@ -533,7 +607,7 @@ function AppContent() {
       setUser(mapBackendUser(response.user, profile));
       navigateTo('home');
     } catch (err: unknown) {
-      const msg = extractApiErrorMessage(err, 'Registration failed');
+      const msg = extractApiErrorMessage(err, 'Не удалось зарегистрироваться');
       toast.error(msg);
     }
   };
@@ -761,6 +835,7 @@ function AppContent() {
       return (
         <OrganizerAuthChoice
           onBack={() => navigateTo('roleSelection')}
+          onGoogleSignIn={() => navigateTo('organizerGoogleSignIn')}
           onSignIn={() => navigateTo('organizerSignIn')}
           onRegister={() => navigateTo('organizerRegistrationForm')}
         />
@@ -801,10 +876,31 @@ function AppContent() {
         />
       );
     }
+    if (screen === 'ownerGoogleSignIn') {
+      return (
+        <GoogleAuth
+          title={`${t.profile.owner} - вход через Google`}
+          onAuthenticated={handleOwnerGoogleLogin}
+          onBack={() => navigateTo('ownerAuthChoice')}
+          onRegister={() => navigateTo('ownerGoogleRegister')}
+        />
+      );
+    }
+    if (screen === 'organizerGoogleSignIn') {
+      return (
+        <GoogleAuth
+          title={`${t.profile.organizer} - вход через Google`}
+          onAuthenticated={handleOrganizerGoogleLogin}
+          onBack={() => navigateTo('organizerAuthChoice')}
+          onRegister={() => navigateTo('organizerRegistrationForm')}
+        />
+      );
+    }
     if (screen === 'ownerSignIn') {
       return (
         <OwnerSignIn
           onComplete={handleOwnerSignIn}
+          onGoogleSignIn={() => navigateTo('ownerGoogleSignIn')}
           onBack={() => navigateTo('ownerAuthChoice')}
         />
       );
@@ -812,6 +908,7 @@ function AppContent() {
     if (screen === 'organizerRegistration') {
       return (
         <OrganizerRegistration
+          phone={routeData.phone}
           onComplete={handleOrganizerRegistered}
           onBack={() => navigateTo('phoneAuth')}
         />

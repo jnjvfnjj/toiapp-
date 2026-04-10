@@ -5,12 +5,13 @@ import { EthnicBorder } from '../EthnicPattern';
 import { useTranslations } from '../../i18n/translations';
 
 interface OrganizerAuthChoiceProps {
+  onGoogleSignIn: () => void;
   onSignIn: () => void;
   onRegister: () => void;
   onBack: () => void;
 }
 
-export function OrganizerAuthChoice({ onSignIn, onRegister, onBack }: OrganizerAuthChoiceProps) {
+export function OrganizerAuthChoice({ onGoogleSignIn, onSignIn, onRegister, onBack }: OrganizerAuthChoiceProps) {
   const t = useTranslations();
 
   return (
@@ -31,6 +32,13 @@ export function OrganizerAuthChoice({ onSignIn, onRegister, onBack }: OrganizerA
         </div>
 
         <div className="space-y-4">
+          <Button
+            onClick={onGoogleSignIn}
+            className="w-full bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 py-6 rounded-2xl shadow-lg"
+          >
+            Войти через Google
+          </Button>
+
           <Button
             onClick={onSignIn}
             variant="outline"

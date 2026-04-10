@@ -1,12 +1,33 @@
+import hashlib
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 from rest_framework import serializers
 
 User = get_user_model()
 
 
+def _username_for_email(email: str) -> str:
+    """
+    USERNAME_FIELD is email, but Django still stores `username` (unique, max 150).
+    Use email when it fits; otherwise a stable short id so registration never fails.
+    """
+    email = (email or '').strip().lower()
+    if len(email) <= 150:
+        return email
+    digest = hashlib.sha256(email.encode('utf-8')).hexdigest()[:32]
+    return f'u_{digest}'[:150]
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    role = serializers.ChoiceField(
+        choices=[User.ROLE_ORGANIZER, User.ROLE_OWNER],
+        required=True,
+        help_text='organizer или owner',
+    )
 
     class Meta:
         model = User
@@ -14,17 +35,41 @@ class RegisterSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'date_joined')
 
     def validate_password(self, value):
-        validate_password(value)
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            # Одно понятное сообщение вместо списка на английском
+            raise serializers.ValidationError(
+                'Пароль слишком простой. Используйте не менее 8 символов, буквы и цифры, избегайте очевидных слов.'
+            ) from exc
         return value
 
     def validate_email(self, value: str) -> str:
-        return (value or '').strip().lower()
+        email = (value or '').strip().lower()
+        if not email:
+            raise serializers.ValidationError('Укажите email')
+        if User.objects.filter(email=email).exists():
+            raise serializers.ValidationError('Этот email уже зарегистрирован')
+        return email
+
+    def validate(self, attrs):
+        # Игнорируем подделку username с клиента — всегда согласуем с email.
+        email = attrs.get('email')
+        if email:
+            attrs['username'] = _username_for_email(email)
+        phone = attrs.get('phone')
+        if phone is not None and str(phone).strip() == '':
+            attrs['phone'] = ''
+        return attrs
 
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User(**validated_data)
         user.set_password(password)
-        user.save()
+        try:
+            user.save()
+        except IntegrityError:
+            raise serializers.ValidationError({'email': ['Этот email уже зарегистрирован']})
         return user
 
 

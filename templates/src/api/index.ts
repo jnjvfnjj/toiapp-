@@ -7,5 +7,6 @@ export {
   getUser,
   clearAuth,
   api,
+  parseApiErrorBody,
   type ApiError,
 } from './client';

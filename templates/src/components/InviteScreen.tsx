@@ -79,7 +79,6 @@ export function InviteScreen({
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATES[0].id);
   const [customText, setCustomText] = useState('');
   const [justCopied, setJustCopied] = useState(false);
-  const [sendIndex, setSendIndex] = useState<number | null>(null);
 
   const selectedGuests = useMemo(() => {
     if (group === 'all') return guests;
@@ -119,28 +118,21 @@ export function InviteScreen({
   }, [selectedGuests]);
 
   const startWhatsappSend = async () => {
-    // To avoid popup-blockers, open one chat at a time.
     if (selectedGuestsWithPhones.length === 0) return;
     try {
       await navigator.clipboard.writeText(message);
     } catch {
       // ignore
     }
-    setSendIndex(0);
-    const first = selectedGuestsWithPhones[0];
-    window.open(whatsappUrl(first.phoneDigits as string, message), '_blank', 'noopener,noreferrer');
-  };
-
-  const sendNext = () => {
-    if (sendIndex === null) return;
-    const nextIndex = sendIndex + 1;
-    if (nextIndex >= selectedGuestsWithPhones.length) {
-      setSendIndex(null);
-      return;
-    }
-    setSendIndex(nextIndex);
-    const item = selectedGuestsWithPhones[nextIndex];
-    window.open(whatsappUrl(item.phoneDigits as string, message), '_blank', 'noopener,noreferrer');
+    // Open all WhatsApp chats at once
+    selectedGuestsWithPhones.forEach((item, index) => {
+      // Add small delay to avoid overwhelming the browser
+      setTimeout(() => {
+        window.open(whatsappUrl(item.phoneDigits as string, message), '_blank', 'noopener,noreferrer');
+      }, index * 500); // 500ms delay between each open
+    });
+    // Mark all as sent (optional, or keep the manual marking)
+    // onMarkInvited(selectedGuests.map((g) => g.id));
   };
 
   return (
@@ -221,40 +213,17 @@ export function InviteScreen({
             </Button>
           </div>
 
-          {sendIndex !== null && (
-            <div className="mt-4 bg-popover rounded-xl p-4">
-              <p className="text-foreground font-medium mb-2">Отправка в WhatsApp</p>
-              <p className="text-muted-foreground text-sm mb-3">
-                Открыто {sendIndex + 1} из {selectedGuestsWithPhones.length}. После отправки в WhatsApp нажмите «Следующий».
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" className="rounded-xl flex-1" onClick={() => setSendIndex(null)}>
-                  Закрыть
-                </Button>
-                <Button className="rounded-xl flex-1" onClick={sendNext}>
-                  Следующий
-                </Button>
-              </div>
-            </div>
+          {selectedGuestsWithPhones.length !== selectedGuests.length && (
+            <p className="text-muted-foreground text-xs mt-2">
+              В WhatsApp будут отправлены только гости с указанным номером телефона.
+            </p>
           )}
-
-          <div className="mt-4">
-            <Button onClick={handleMarkInvited} variant="outline" className="w-full rounded-xl">
-              <Check className="w-4 h-4 mr-2" />
-              Отметить выбранных как приглашённых
-            </Button>
-            {selectedGuestsWithPhones.length !== selectedGuests.length && (
-              <p className="text-muted-foreground text-xs mt-2">
-                В WhatsApp будут отправлены только гости с указанным номером телефона.
-              </p>
-            )}
-          </div>
         </div>
 
         <div className="bg-card rounded-2xl p-5 shadow-sm">
           <p className="text-muted-foreground mb-2">Подсказка</p>
           <p className="text-foreground text-sm">
-            Нажмите «Отправить в WhatsApp» — откроется чат с первым гостем и готовым текстом. Затем используйте «Следующий», чтобы отправить остальным.
+            Нажмите «Отправить в WhatsApp» — откроются чаты со всеми гостями и готовым текстом. Отправьте сообщения в каждом чате.
           </p>
         </div>
       </div>

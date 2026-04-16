@@ -56,3 +56,6 @@ package-lock.json
 # Но сохраняем package.json и package-lock.json в templates
 !/templates/package.json
 !/templates/package-lock.json
+
+node_modules/
+templates/node_modules/
